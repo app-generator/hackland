@@ -35,7 +35,7 @@ source bin/activate
 -----------------------------------------------------------------------------------------
 
 PWD = /var/www/dashboard
-pip install -r requirements-no-postgres.txt
+pip install -r requirements-sqlite.txt
 
 -----------------------------------------------------------------------------------------
 -- Test the app
@@ -137,11 +137,19 @@ https://github.com/dhamaniasad/py-bcrypt/issues/7
 https://stackoverflow.com/questions/34974088/failed-to-install-bcrypt-python
 
 -----------------------------------------------
-Posible Workaround -> run global:
-
-pip install --user --upgrade bcrypt
-
-and test manualy the import
+Patch: replace bcrypt with [passlib](https://passlib.readthedocs.io/en/stable/lib/passlib.hash.bcrypt.html)
 
 
+-----------------------------------------------
+New Issue: Write permissions
 
+    return dialect.connect(*cargs, **cparams)
+  File "/var/www/dashboard/lib/python3.6/site-packages/sqlalchemy/engine/default.py", line 481,
+    return self.dbapi.connect(*cargs, **cparams)
+OperationalError: (sqlite3.OperationalError) unable to open database file
+(Background on this error at: http://sqlalche.me/e/e3q8)
+
+Possible patches: 
+1. chwon apache:apache on the directory tree 
+2. Add new write in the http.conf to allow write for logs & dbms 
+ 
