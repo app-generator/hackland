@@ -1,5 +1,7 @@
 # Flask CentOS deployment
 
+This page explains how to deploy a [Flask Dashboard](https://github.com/app-generator/flask-boilerplate-dashboard-argon) sandboxed with a virtualenv and served by Apache HTTP server using the `mod_wsgi` module.
+
 ## Environment
 
 Software requirements: apache server, mod_wsgi, virtualenv
@@ -37,6 +39,8 @@ Virtual environments will sandbox the app to run isolated from the global server
 $ sudo pip install virtualenv
 ```
 
+<br />
+
 ## Ownership
 
 The apache server is executed under the `apache` user and group. We can check this using the command:
@@ -58,6 +62,8 @@ The next step is to allow the authenticated user ( `loader` ) to have write acce
 $ sudo chmod 775 /var/www
 ```
 
+<br />
+
 ##  Clone sources
 
 ```bash
@@ -65,6 +71,8 @@ $ cd /var/www
 $ git clone https://github.com/app-generator/flask-boilerplate-dashboard-argon.git dashboard
 $ # the source code is cloned in the dashboard directory
 ```
+
+<br />
 
 ## Create Virtual environment
 
@@ -75,6 +83,8 @@ $
 $ # create the virtual env inside dashboard sources
 $ virtualenv --python=python3 dashboard
 ```
+
+<br />
 
 ## Activate venv
 
@@ -93,6 +103,8 @@ $ python --version
 Python 3.6.8 # something like Python 3.x means we are on the good track
 ```
 
+<br />
+
 ## Install modules for development
 
 In development mode, SQLite database will be used
@@ -103,6 +115,8 @@ $ pwd # check the current working directory
 $ 
 $ pip install -r requirements-sqlite.txt
 ```
+
+<br />
 
 ## Test the app
 
@@ -130,11 +144,15 @@ $ # check with lynx
 $ lynx localhost:5001
 ```
 
+<br />
+
 ## Link the app with Apache
 
 The Flask application will be executed by Apache using `mod_wsgi` module
 
-## Create wsgi loaded
+<br />
+
+### Create wsgi loader
 
 A new file must be created in the `dashboard` directory.
 
@@ -169,7 +187,7 @@ except KeyError:
 application = create_app(config_mode)
 ```
 
-## Edit Apache configuration  
+### Edit Apache configuration  
 
 > File: `/etc/httpd/conf/httpd.conf`  
 
@@ -191,6 +209,8 @@ application = create_app(config_mode)
 
 ```
 
+<br />
+
 ## Update ownership
 
 More information in this article: [Apache permissions, MKDir fail](https://stackoverflow.com/questions/5165183/apache-permissions-php-file-create-mkdir-fail)
@@ -199,6 +219,8 @@ More information in this article: [Apache permissions, MKDir fail](https://stack
 $ sudo chown apache:apache -R /var/www/dashboard
 $ sudo chmod 0750 -R /var/www/dashboard
 ```
+
+<br />
 
 ## Start / restart the server
 
