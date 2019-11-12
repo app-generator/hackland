@@ -118,6 +118,14 @@ $ pip install -r requirements-sqlite.txt
 
 <br />
 
+## Edit the application config
+
+Open the file `/var/www/dashboard/`**config.py**
+
+> Edit line to use a file database:
+
+`SQLALCHEMY_DATABASE_URI = 'sqlite:////tmp/database.db'`
+
 ## Test the app
 
 At this point we need to test if the application is properly installed. For this we need to start it in standalone mode using Flask
