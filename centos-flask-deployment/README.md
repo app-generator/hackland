@@ -1,73 +1,157 @@
+# Flask CentOS deployment
 
-< Execute As ROOT >
+## Environment
 
------------------------------------------------------------------------------------------
--- Go to /www/root
------------------------------------------------------------------------------------------
+Software requirements: apache server, mod_wsgi, virtualenv
 
-cd /var/www
+### Install [Apache](https://httpd.apache.org/) server
 
------------------------------------------------------------------------------------------
--- Clone sources
------------------------------------------------------------------------------------------
+```bash
+$ sudo yum install httpd
+$ 
+$ # by default the server is down.
+$ sudo systemctl start httpd
+```
 
-PWD = /var/www
-git clone https://github.com/app-generator/flask-boilerplate-dashboard-argon.git dashboard
+### Install [mod_wsgi](https://modwsgi.readthedocs.io/)
 
------------------------------------------------------------------------------------------
--- Create venv
------------------------------------------------------------------------------------------
+```bash
+$ sudo yum install mod_wsgi
+$
+$ # restart apache
+$ sudo systemctl restart httpd
+```
 
-PWD = /var/www
-virtualenv --python=python3 dashboard
+> Test is `mod_wsgi` is properly loaded
 
------------------------------------------------------------------------------------------
--- Activate venv
------------------------------------------------------------------------------------------
+```bash
+$ sudo httpd -M | grep wsgi
+wsgi_module (shared) # <-- the OK response
+```
 
-cd /var/www/dashboard
-PWD = /var/www/dashboard
-source bin/activate
-# check python version: -> Python 3.6.8
+### Install [Virtualenv](https://virtualenv.pypa.io/)
 
------------------------------------------------------------------------------------------
--- Install modules
------------------------------------------------------------------------------------------
+Virtual environments will sandbox the app to run isolated from the global server environment
 
-PWD = /var/www/dashboard
-pip install -r requirements-sqlite.txt
+```bash
+$ sudo pip install virtualenv
+```
 
------------------------------------------------------------------------------------------
--- Test the app
------------------------------------------------------------------------------------------
+## Ownership
 
-PWD = /var/www/dashboard
-export FLASK_APP=run.py
-flask run
+The apache server is executed under the `apache` user and group. We can check this using the command:
 
------------------------------------------------------------------------------------------
--- Create /var/www/dashboard/wsgi.py 
------------------------------------------------------------------------------------------
+```bash
+$ cat /etc/passwd | grep apache
+$ apache:x:48:48:Apache:/usr/share/httpd:/sbin/nologin
+```
 
-import os
+We can see that theuser apache has no shell, for security reasons. In order to have write access to the `/var/www` directory, let's add current user tot the apache group
+
+```bash
+$ sudo usermod -a -G apache loader
+```
+
+The next step is to allow the authenticated user ( `loader` ) to have write access to the `/var/www` directory
+
+```bash
+$ sudo chmod 775 /var/www
+```
+
+##  Clone sources
+
+```bash
+$ cd /var/www
+$ git clone https://github.com/app-generator/flask-boilerplate-dashboard-argon.git dashboard
+$ # the source code is cloned in the dashboard directory
+```
+
+## Create Virtual environment
+
+```bash
+$ pwd # check the current working directory
+/var/www
+$ 
+$ # create the virtual env inside dashboard sources
+$ virtualenv --python=python3 dashboard
+```
+
+## Activate venv
+
+The modules required by the Flask application should be installed after VENV activation. Like this the whole appliation will run isolated. 
+
+```bash
+$ pwd # check the current working directory
+/var/www
+$ cd /var/www/dashboard
+$
+$ # activate the VENV
+$ source bin/activate
+$ 
+$ # check the Python version
+$ python --version
+Python 3.6.8 # something like Python 3.x means we are on the good track
+```
+
+## Install modules for development
+
+In development mode, SQLite database will be used
+
+```bash
+$ pwd # check the current working directory
+/var/www/dashboard
+$ 
+$ pip install -r requirements-sqlite.txt
+```
+
+## Test the app
+
+At this point we need to test if the application is properly installed. For this we need to start it in standalone mode using Flask
+
+```bash
+$ pwd # check the current working directory
+/var/www/dashboard
+$
+$ export FLASK_APP=run.py
+$ flask run
+$ # the app runs on localhost:5000
+$
+$ # check with lynx
+$ lynx localhost:5000
+```
+
+> Note: in case when the port 5000 is ocupied by another process, we can start Flask app using a free port:
+
+```bash
+$ flask run --port=5001
+$ # the app runs on localhost:5001
+$
+$ # check with lynx
+$ lynx localhost:5001
+```
+
+## Link the app with Apache
+
+The Flask application will be executed by Apache using `mod_wsgi` module
+
+## Create wsgi loaded
+
+A new file must be created in the `dashboard` directory.
+
+> File: `/var/www/dashboard/wsgi.py`
+
+```python
+#!/usr/bin/env python
+
 import sys
 import site
 
-# Add the site-packages of the chosen virtualenv to work with
-#site.addsitedir('/var/www/dashboard/lib/python3.6/site-packages')
+site.addsitedir('/var/www/dashboard/lib/python3.6/site-packages')
 
-#sys.path.append('/var/www/dashboard')
-#sys.path.append('/var/www/dashboard/app')
-
-activate_this = '/var/www/dashboard/bin/activate_this.py'
-
-with open(activate_this) as file_:
-       exec(file_.read(), dict(__file__=activate_this))
-
-#sys.path.insert(0, '/var/www/dashboard/')
-#sys.path.insert(0, '/var/www/dashboard/app')
-#sys.path.insert(0, '/var/www/dashboard/lib')
-#sys.path.insert(0, '/var/www/dashboard/bin')
+sys.path.insert(0, '/var/www/dashboard/')
+sys.path.insert(0, '/var/www/dashboard/app')
+sys.path.insert(0, '/var/www/dashboard/lib')
+sys.path.insert(0, '/var/www/dashboard/bin')
 
 from os import environ
 from sys import exit
@@ -75,7 +159,7 @@ from sys import exit
 from config import config_dict
 from app import create_app, db
 
-get_config_mode = environ.get('APPSEED_CONFIG_MODE', 'Debug')
+get_config_mode = environ.get('APPSEED_CONFIG_MODE', 'Debug') #Debug, Production
 
 try:
     config_mode = config_dict[get_config_mode.capitalize()]
@@ -83,73 +167,41 @@ except KeyError:
     exit('Error: Invalid APPSEED_CONFIG_MODE environment variable entry.')
 
 application = create_app(config_mode)
+```
 
------------------------------------------------------------------------------------------
--- Edit Apache cfg: /etc/httpd/conf/httpd.conf  
------------------------------------------------------------------------------------------
+## Edit Apache configuration  
+
+> File: `/etc/httpd/conf/httpd.conf`  
+
+```xml
 
 <VirtualHost *:80>
 
-     ServerName localhost
+    ServerName localhost
 
-     WSGIDaemonProcess dashboard user=apache group=apache threads=2
+    WSGIDaemonProcess dashboard user=apache group=apache threads=2
 
-     WSGIScriptAlias / /var/www/dashboard/wsgi.py
+    WSGIScriptAlias / /var/www/dashboard/wsgi.py
 
-     <Directory /var/www/dashboard>
-         Require all granted
-     </Directory>
+    <Directory /var/www/dashboard>
+        Require all granted
+    </Directory>
 
- </VirtualHost>
+</VirtualHost>
 
------------------------------------------------------------------------------------------
--- Start the server  
------------------------------------------------------------------------------------------
-
-sudo service httpd restart
-
-Error in logs:
-
-```bash
-
-[Sat Nov 09 12:58:45.666933 2019] [:error] [pid 19409] [client ::1:48684] mod_wsgi (pid=19409): Target WSGI script '/var/www/dashboard/wsgi.py' cannot be loaded as Python module.
-[Sat Nov 09 12:58:45.666970 2019] [:error] [pid 19409] [client ::1:48684] mod_wsgi (pid=19409): Exception occurred processing WSGI script '/var/www/dashboard/wsgi.py'.
-[Sat Nov 09 12:58:45.666995 2019] [:error] [pid 19409] [client ::1:48684] Traceback (most recent call last):
-[Sat Nov 09 12:58:45.667014 2019] [:error] [pid 19409] [client ::1:48684]   File "/var/www/dashboard/wsgi.py", line 32, in <module>
-[Sat Nov 09 12:58:45.667081 2019] [:error] [pid 19409] [client ::1:48684]     application = create_app(config_mode)
-[Sat Nov 09 12:58:45.667091 2019] [:error] [pid 19409] [client ::1:48684]   File "/var/www/dashboard/app/__init__.py", line 77, in create_app
-[Sat Nov 09 12:58:45.667144 2019] [:error] [pid 19409] [client ::1:48684]     register_blueprints(app)
-[Sat Nov 09 12:58:45.667154 2019] [:error] [pid 19409] [client ::1:48684]   File "/var/www/dashboard/app/__init__.py", line 24, in register_blueprints
-[Sat Nov 09 12:58:45.667171 2019] [:error] [pid 19409] [client ::1:48684]     module = import_module('app.{}.routes'.format(module_name))
-[Sat Nov 09 12:58:45.667179 2019] [:error] [pid 19409] [client ::1:48684]   File "/usr/lib64/python2.7/importlib/__init__.py", line 37, in import_module
-[Sat Nov 09 12:58:45.667232 2019] [:error] [pid 19409] [client ::1:48684]     __import__(name)
-[Sat Nov 09 12:58:45.667242 2019] [:error] [pid 19409] [client ::1:48684]   File "/var/www/dashboard/app/base/routes.py", line 8, in <module>
-[Sat Nov 09 12:58:45.667298 2019] [:error] [pid 19409] [client ::1:48684]     from bcrypt import checkpw
-[Sat Nov 09 12:58:45.667308 2019] [:error] [pid 19409] [client ::1:48684]   File "/var/www/dashboard/lib/python3.6/site-packages/bcrypt/__init__.py", line 25, in <module>
-[Sat Nov 09 12:58:45.667372 2019] [:error] [pid 19409] [client ::1:48684]     from . import _bcrypt
-[Sat Nov 09 12:58:45.667390 2019] [:error] [pid 19409] [client ::1:48684] ImportError: cannot import name _bcrypt
 ```
 
------------------------------------------------
-The problem is reported on many forums:
+## Update ownership
 
-https://github.com/dhamaniasad/py-bcrypt/issues/7
-https://stackoverflow.com/questions/34974088/failed-to-install-bcrypt-python
+More information in this article: [Apache permissions, MKDir fail](https://stackoverflow.com/questions/5165183/apache-permissions-php-file-create-mkdir-fail)
 
------------------------------------------------
-Patch: replace bcrypt with [passlib](https://passlib.readthedocs.io/en/stable/lib/passlib.hash.bcrypt.html)
+```bash
+$ sudo chown apache:apache -R /var/www/dashboard
+$ sudo chmod 0750 -R /var/www/dashboard
+```
 
+## Start / restart the server
 
------------------------------------------------
-New Issue: Write permissions
-
-    return dialect.connect(*cargs, **cparams)
-  File "/var/www/dashboard/lib/python3.6/site-packages/sqlalchemy/engine/default.py", line 481,
-    return self.dbapi.connect(*cargs, **cparams)
-OperationalError: (sqlite3.OperationalError) unable to open database file
-(Background on this error at: http://sqlalche.me/e/e3q8)
-
-Possible patches: 
-1. chwon apache:apache on the directory tree 
-2. Add new write in the http.conf to allow write for logs & dbms 
- 
+```bash
+$ sudo service httpd restart
+```
