@@ -36,7 +36,7 @@ wsgi_module (shared) # <-- the OK response
 Virtual environments will sandbox the app to run isolated from the global server environment
 
 ```bash
-$ sudo pip install virtualenv
+$ sudo pip3 install virtualenv
 ```
 
 <br />
